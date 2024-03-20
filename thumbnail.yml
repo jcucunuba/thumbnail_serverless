@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: lambda-code-bucket-thumbnails-serverless-stori-v2
+  ThumbnailFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: handler.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: lambda-code-bucket-thumbnails-serverless
+        S3Key: thumbnail_generator.zip
+      Runtime: python3.8
+      Timeout: 60
+      Environment:
+        Variables:
+          DESTINATION_BUCKET: !Ref S3Bucket
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:aws:s3:::${S3Bucket}/*
+                  - !Sub arn:aws:s3:::lambda-code-bucket-thumbnails-serverless/*
+  S3EventPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ThumbnailFunction.Arn
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt ThumbnailFunction.Arn
+  ThumbnailFunctionTrigger:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3Bucket
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt ThumbnailFunction.Arn
